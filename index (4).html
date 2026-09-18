@@ -1,0 +1,1136 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Espace Maths — Gestion des élèves</title>
+<link rel="manifest" href="data:application/manifest+json,{%22name%22:%22Espace%20Maths%22,%22short_name%22:%22Espace%20Maths%22,%22start_url%22:%22.%22,%22display%22:%22standalone%22,%22background_color%22:%22%23152420%22,%22theme_color%22:%22%23152420%22}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --bg:#152420;
+    --surface:#1D322C;
+    --surface-2:#24443B;
+    --line:#2E4D43;
+    --chalk:#F2EFE6;
+    --chalk-dim:#AFC3BC;
+    --accent:#E8C468;
+    --accent-dim:#8A7538;
+    --teal:#5B9C93;
+    --danger:#D9705C;
+    --radius:10px;
+    --serif: "Source Serif 4", Georgia, serif;
+    --sans: "Inter", system-ui, -apple-system, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;}
+  body{
+    background:var(--bg);
+    color:var(--chalk);
+    font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{font-family:var(--serif); font-weight:600; margin:0;}
+  a{color:inherit;}
+  button{font-family:var(--sans); cursor:pointer;}
+  input,select,textarea{font-family:var(--sans);}
+
+  /* ---------- layout ---------- */
+  #app{min-height:100vh; display:flex;}
+
+  /* ---------- auth screen ---------- */
+  .auth-wrap{
+    width:100%; min-height:100vh; display:flex; align-items:center; justify-content:center;
+    background:
+      radial-gradient(circle at 15% 20%, rgba(232,196,104,0.08), transparent 40%),
+      radial-gradient(circle at 85% 80%, rgba(91,156,147,0.10), transparent 45%),
+      var(--bg);
+    padding:24px;
+  }
+  .auth-card{
+    width:100%; max-width:380px;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:36px 32px;
+  }
+  .auth-mark{
+    font-family:var(--serif); font-size:1.4rem; font-weight:700; color:var(--accent);
+    margin-bottom:4px;
+  }
+  .auth-sub{ color:var(--chalk-dim); font-size:0.92rem; margin-bottom:28px;}
+  .field{ margin-bottom:16px; }
+  .field label{ display:block; font-size:0.82rem; color:var(--chalk-dim); margin-bottom:6px;}
+  .field input, .field select, .field textarea{
+    width:100%; padding:11px 12px; border-radius:8px; border:1px solid var(--line);
+    background:var(--bg); color:var(--chalk); font-size:0.95rem;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus{ outline:2px solid var(--teal); outline-offset:1px;}
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:8px;
+    padding:11px 18px; border-radius:8px; border:none; font-size:0.92rem; font-weight:600;
+  }
+  .btn-primary{ background:var(--accent); color:#1B1204; width:100%; }
+  .btn-primary:hover{ background:#f0ce7f; }
+  .btn-ghost{ background:transparent; color:var(--chalk-dim); border:1px solid var(--line); }
+  .btn-ghost:hover{ color:var(--chalk); border-color:var(--teal); }
+  .btn-danger{ background:transparent; color:var(--danger); border:1px solid var(--danger);}
+  .auth-toggle{ margin-top:18px; text-align:center; font-size:0.86rem; color:var(--chalk-dim);}
+  .auth-toggle button{ background:none; border:none; color:var(--teal); font-weight:600; padding:0; }
+  .auth-error{ background:rgba(217,112,92,0.12); border:1px solid var(--danger); color:#F3C3B8;
+    padding:10px 12px; border-radius:8px; font-size:0.85rem; margin-bottom:16px;}
+  .auth-note{ background:rgba(91,156,147,0.12); border:1px solid var(--teal); color:#CFE7E2;
+    padding:10px 12px; border-radius:8px; font-size:0.85rem; margin-bottom:16px;}
+
+  /* ---------- shell ---------- */
+  .sidebar{
+    width:230px; flex-shrink:0; background:var(--surface); border-right:1px solid var(--line);
+    padding:22px 14px; display:flex; flex-direction:column; position:sticky; top:0; height:100vh;
+  }
+  .brand{ font-family:var(--serif); font-weight:700; color:var(--accent); font-size:1.15rem; padding:0 10px 22px; }
+  .nav-item{
+    display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:8px;
+    color:var(--chalk-dim); text-decoration:none; font-size:0.9rem; margin-bottom:2px; cursor:pointer; border:none; background:none; width:100%; text-align:left;
+  }
+  .nav-item:hover{ background:var(--surface-2); color:var(--chalk); }
+  .nav-item.active{ background:var(--surface-2); color:var(--accent); font-weight:600; }
+  .sidebar-foot{ margin-top:auto; padding-top:14px; border-top:1px solid var(--line); }
+  .who{ font-size:0.82rem; color:var(--chalk-dim); padding:0 10px 10px; }
+
+  .main{ flex:1; min-width:0; padding:32px 40px; max-width:1200px; }
+  .page-head{ display:flex; align-items:baseline; justify-content:space-between; margin-bottom:24px; flex-wrap:wrap; gap:12px;}
+  .page-head h1{ font-size:1.5rem; }
+  .page-sub{ color:var(--chalk-dim); font-size:0.88rem; margin-top:4px; }
+
+  .cards-row{ display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:14px; margin-bottom:28px; }
+  .stat-card{ background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:18px; }
+  .stat-num{ font-family:var(--serif); font-size:1.7rem; color:var(--accent); }
+  .stat-label{ font-size:0.82rem; color:var(--chalk-dim); margin-top:4px; }
+
+  .panel{ background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:20px; margin-bottom:20px;}
+  .panel h3{ font-size:0.98rem; color:var(--accent); margin-bottom:10px; }
+  table{ width:100%; border-collapse:collapse; font-size:0.88rem; }
+  th{ text-align:left; color:var(--chalk-dim); font-weight:600; font-size:0.78rem; text-transform:none; padding:8px 10px; border-bottom:1px solid var(--line); }
+  td{ padding:10px 10px; border-bottom:1px solid rgba(46,77,67,0.5); vertical-align:middle;}
+  tr:last-child td{ border-bottom:none; }
+  .tag{ display:inline-block; padding:2px 9px; border-radius:20px; font-size:0.74rem; font-weight:600; }
+  .tag-ok{ background:rgba(91,156,147,0.18); color:#9FD9CD; }
+  .tag-warn{ background:rgba(232,196,104,0.18); color:var(--accent); }
+  .tag-bad{ background:rgba(217,112,92,0.18); color:#F3B4A4; }
+  .icon-btn{ background:none; border:none; color:var(--chalk-dim); padding:4px 6px; border-radius:6px; font-size:0.85rem;}
+  .icon-btn:hover{ color:var(--chalk); background:var(--surface-2); }
+  .empty-state{ text-align:center; padding:40px 20px; color:var(--chalk-dim); }
+  .mini-select{ padding:5px 8px; border-radius:6px; border:1px solid var(--line); background:var(--bg); color:var(--chalk); font-size:0.8rem;}
+  .cycle-bar{ display:flex; gap:3px; }
+  .cycle-dot{ width:10px; height:10px; border-radius:50%; background:var(--line); }
+  .cycle-dot.filled{ background:var(--accent); }
+
+  /* modal */
+  .overlay{ position:fixed; inset:0; background:rgba(10,16,14,0.6); display:flex; align-items:center; justify-content:center; padding:20px; z-index:50;}
+  .modal{ background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:26px; width:100%; max-width:460px; max-height:88vh; overflow-y:auto;}
+  .modal h2{ font-size:1.15rem; margin-bottom:18px;}
+  .modal-actions{ display:flex; gap:10px; justify-content:flex-end; margin-top:22px;}
+
+  .toolbar{ display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; gap:10px; flex-wrap:wrap;}
+  .search-input{ padding:9px 12px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--chalk); font-size:0.88rem; min-width:200px;}
+  .filters-row{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
+
+  @media (max-width: 760px){
+    #app{ flex-direction:column; }
+    .sidebar{ position:static; width:100%; height:auto; flex-direction:row; overflow-x:auto; padding:12px; }
+    .brand{ display:none; }
+    .sidebar-foot{ display:none; }
+    .nav-item{ white-space:nowrap; }
+    .main{ padding:20px; }
+    table{ font-size:0.8rem; }
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+/* ============================================================
+   CONFIGURATION SUPABASE
+   ============================================================ */
+const SUPABASE_URL = "https://nxfdbgjektcuvnikkmvg.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_Zvgj54kYet1iBa1pqiPcxw_Ty2uAlMX";
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/* ============================================================
+   ÉTAT GLOBAL
+   ============================================================ */
+let state = {
+  session: null,
+  profile: null,
+  route: "dashboard",
+  studentsSearch: "",
+};
+
+/* Niveaux/sections avec tarif associé (DT par séance, payé tous les 4 séances) */
+const NIVEAUX = [
+  {value:"1ere_annee", label:"1ère année", filiere:"autre", tarif:40},
+  {value:"2eme_annee_sciences", label:"2ème année Sciences", filiere:"sciences", tarif:40},
+  {value:"2eme_annee_informatique", label:"2ème année Informatique", filiere:"informatique", tarif:40},
+  {value:"2eme_annee_eco", label:"2ème année Économie & Gestion", filiere:"economie_gestion", tarif:40},
+  {value:"3eme_annee_sciences", label:"3ème année Sciences", filiere:"sciences", tarif:40},
+  {value:"3eme_annee_techniques", label:"3ème année Sciences Techniques", filiere:"sciences_techniques", tarif:40},
+  {value:"3eme_annee_informatique", label:"3ème année Informatique", filiere:"informatique", tarif:40},
+  {value:"3eme_annee_eco", label:"3ème année Économie & Gestion", filiere:"economie_gestion", tarif:40},
+  {value:"bac_sciences", label:"Bac Sciences", filiere:"sciences", tarif:50},
+  {value:"bac_techniques", label:"Bac Sciences Techniques", filiere:"sciences_techniques", tarif:50},
+  {value:"bac_informatique", label:"Bac Informatique", filiere:"informatique", tarif:50},
+  {value:"bac_eco", label:"Bac Économie & Gestion", filiere:"economie_gestion", tarif:50},
+  {value:"college", label:"Collège", filiere:"college", tarif:null},
+  {value:"autre", label:"Autre", filiere:"autre", tarif:null},
+];
+function niveauInfo(label){ return NIVEAUX.find(n=>n.label===label); }
+
+const app = document.getElementById("app");
+
+/* ============================================================
+   AUTH
+   ============================================================ */
+async function init(){
+  const { data: { session } } = await sb.auth.getSession();
+  state.session = session;
+  if(session){ await loadProfile(); }
+  render();
+  sb.auth.onAuthStateChange((_event, session) => {
+    state.session = session;
+    if(session){ loadProfile().then(render); }
+    else { state.profile = null; render(); }
+  });
+}
+
+async function loadProfile(){
+  const uid = state.session.user.id;
+  let { data } = await sb.from("profiles").select("*").eq("id", uid).single();
+  if(!data){
+    const { count } = await sb.from("profiles").select("*", { count: "exact", head:true }).eq("role","prof");
+    const role = (count === 0) ? "prof" : "eleve";
+    const { data: created } = await sb.from("profiles").insert({
+      id: uid, role, full_name: state.session.user.user_metadata?.full_name || state.session.user.email
+    }).select().single();
+    data = created;
+  }
+  state.profile = data;
+}
+
+function renderAuth(){
+  app.innerHTML = `
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <div class="auth-mark">Espace Maths</div>
+      <div class="auth-sub" id="auth-sub">Connecte-toi pour continuer</div>
+      <div id="auth-msg"></div>
+      <form id="auth-form">
+        <div class="field" id="name-field" style="display:none">
+          <label>Nom complet</label>
+          <input type="text" id="f-name" autocomplete="name">
+        </div>
+        <div class="field">
+          <label>Email</label>
+          <input type="email" id="f-email" required autocomplete="email">
+        </div>
+        <div class="field">
+          <label>Mot de passe</label>
+          <input type="password" id="f-password" required autocomplete="current-password" minlength="6">
+        </div>
+        <button type="submit" class="btn btn-primary" id="auth-submit">Se connecter</button>
+      </form>
+      <div class="auth-toggle">
+        <span id="toggle-label">Pas encore de compte ?</span>
+        <button id="toggle-mode">S'inscrire</button>
+      </div>
+    </div>
+  </div>`;
+
+  let mode = "login";
+  const form = document.getElementById("auth-form");
+  const nameField = document.getElementById("name-field");
+  const toggleBtn = document.getElementById("toggle-mode");
+  const toggleLabel = document.getElementById("toggle-label");
+  const submitBtn = document.getElementById("auth-submit");
+  const sub = document.getElementById("auth-sub");
+  const msg = document.getElementById("auth-msg");
+
+  toggleBtn.onclick = () => {
+    mode = mode === "login" ? "signup" : "login";
+    nameField.style.display = mode === "signup" ? "block" : "none";
+    submitBtn.textContent = mode === "signup" ? "Créer mon compte" : "Se connecter";
+    toggleLabel.textContent = mode === "signup" ? "Déjà un compte ?" : "Pas encore de compte ?";
+    toggleBtn.textContent = mode === "signup" ? "Se connecter" : "S'inscrire";
+    sub.textContent = mode === "signup" ? "Crée ton compte pour accéder à l'espace" : "Connecte-toi pour continuer";
+    msg.innerHTML = "";
+  };
+
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    msg.innerHTML = "";
+    const email = document.getElementById("f-email").value.trim();
+    const password = document.getElementById("f-password").value;
+    const full_name = document.getElementById("f-name").value.trim();
+    submitBtn.disabled = true;
+    try{
+      if(mode === "signup"){
+        const { error } = await sb.auth.signUp({ email, password, options:{ data:{ full_name } } });
+        if(error) throw error;
+        msg.innerHTML = `<div class="auth-note">Compte créé. Si la confirmation par email est activée, vérifie ta boîte mail avant de te connecter.</div>`;
+      } else {
+        const { error } = await sb.auth.signInWithPassword({ email, password });
+        if(error) throw error;
+      }
+    }catch(err){
+      msg.innerHTML = `<div class="auth-error">${translateAuthError(err.message)}</div>`;
+    }finally{
+      submitBtn.disabled = false;
+    }
+  };
+}
+
+function translateAuthError(m){
+  if(/invalid login credentials/i.test(m)) return "Email ou mot de passe incorrect.";
+  if(/already registered/i.test(m)) return "Un compte existe déjà avec cet email.";
+  if(/password/i.test(m) && /6/i.test(m)) return "Le mot de passe doit contenir au moins 6 caractères.";
+  return m;
+}
+
+async function logout(){ await sb.auth.signOut(); }
+
+/* ============================================================
+   SHELL / NAVIGATION
+   ============================================================ */
+const NAV_PROF = [
+  {id:"dashboard", label:"Tableau de bord", icon:"◧"},
+  {id:"students", label:"Élèves", icon:"◐"},
+  {id:"sessions", label:"Séances", icon:"◔"},
+  {id:"payments", label:"Paiements", icon:"◍"},
+  {id:"absences", label:"Absences", icon:"◑"},
+  {id:"grades", label:"Notes", icon:"◒"},
+  {id:"resources", label:"Ressources", icon:"◫"},
+  {id:"planning", label:"Planning IA", icon:"◔"},
+];
+const NAV_ELEVE = [
+  {id:"dashboard", label:"Mon espace", icon:"◧"},
+  {id:"my-sessions", label:"Mes séances", icon:"◔"},
+  {id:"my-payments", label:"Mes paiements", icon:"◍"},
+  {id:"resources", label:"Ressources", icon:"◫"},
+];
+
+function renderShell(){
+  const isProf = state.profile.role === "prof";
+  const nav = isProf ? NAV_PROF : NAV_ELEVE;
+  app.innerHTML = `
+    <div id="app-inner" style="display:flex; width:100%;">
+      <aside class="sidebar">
+        <div class="brand">Espace Maths</div>
+        <div>
+          ${nav.map(n => `<button class="nav-item ${state.route===n.id?'active':''}" data-route="${n.id}"><span>${n.icon}</span> ${n.label}</button>`).join("")}
+        </div>
+        <div class="sidebar-foot">
+          <div class="who">${state.profile.full_name}<br><span style="opacity:0.7">${isProf?"Professeur":"Élève"}</span></div>
+          <button class="nav-item" id="logout-btn"><span>⏻</span> Déconnexion</button>
+        </div>
+      </aside>
+      <main class="main" id="main"></main>
+    </div>
+  `;
+  document.querySelectorAll(".nav-item[data-route]").forEach(btn=>{
+    btn.onclick = () => { state.route = btn.dataset.route; render(); };
+  });
+  document.getElementById("logout-btn").onclick = logout;
+  renderPage();
+}
+
+function render(){
+  if(!state.session || !state.profile){ renderAuth(); return; }
+  renderShell();
+}
+
+async function renderPage(){
+  const main = document.getElementById("main");
+  main.innerHTML = `<div class="empty-state">Chargement…</div>`;
+  const isProf = state.profile.role === "prof";
+  try{
+    if(state.route === "dashboard") return isProf ? renderProfDashboard(main) : renderEleveDashboard(main);
+    if(state.route === "students") return renderStudents(main);
+    if(state.route === "sessions") return renderSessions(main);
+    if(state.route === "payments") return renderPayments(main);
+    if(state.route === "absences") return renderAbsences(main);
+    if(state.route === "grades") return renderGrades(main);
+    if(state.route === "resources") return renderResources(main, isProf);
+    if(state.route === "planning") return renderPlanning(main);
+    if(state.route === "my-sessions") return renderMySessions(main);
+    if(state.route === "my-payments") return renderMyPayments(main);
+  }catch(err){
+    main.innerHTML = `<div class="empty-state">Erreur : ${err.message}</div>`;
+  }
+}
+
+/* ============================================================
+   HELPERS
+   ============================================================ */
+function fmtDate(d){ if(!d) return "—"; const dt = new Date(d); return dt.toLocaleDateString("fr-FR"); }
+function fmtTime(t){ return t ? t.slice(0,5) : "—"; }
+function fmtMoney(n){ return (n===null||n===undefined) ? "—" : `${Number(n).toFixed(2)} DT`; }
+function openModal(html){
+  const wrap = document.createElement("div");
+  wrap.className = "overlay";
+  wrap.innerHTML = `<div class="modal">${html}</div>`;
+  wrap.onclick = (e)=>{ if(e.target===wrap) wrap.remove(); };
+  document.body.appendChild(wrap);
+  return wrap;
+}
+function counterBadge(n){
+  const cls = n < 0 ? 'tag-warn' : (n >= 4 ? 'tag-bad' : 'tag-ok');
+  return `<span class="tag ${cls}" style="font-family:var(--serif); font-size:0.9rem; min-width:22px; text-align:center;" title="Séances depuis le dernier paiement">${n}</span>`;
+}
+
+/* ============================================================
+   TABLEAU DE BORD — PROF
+   ============================================================ */
+async function renderProfDashboard(main){
+  const [{count:nbEleves}, {count:nbAbsences}, {data:paiements}] = await Promise.all([
+    sb.from("students").select("*", {count:"exact", head:true}).eq("actif", true),
+    sb.from("absences").select("*", {count:"exact", head:true}).gte("date_absence", new Date(Date.now()-30*86400000).toISOString().slice(0,10)),
+    sb.from("payments").select("montant, statut, date_paiement").gte("date_paiement", new Date(Date.now()-30*86400000).toISOString().slice(0,10)),
+  ]);
+  const totalMois = (paiements||[]).filter(p=>p.statut==='paye').reduce((a,p)=>a+Number(p.montant),0);
+  const enRetard = (paiements||[]).filter(p=>p.statut==='en_retard').length;
+
+  main.innerHTML = `
+    <div class="page-head"><div><h1>Tableau de bord</h1><div class="page-sub">Vue d'ensemble de ton activité</div></div></div>
+    <div class="cards-row">
+      <div class="stat-card"><div class="stat-num">${nbEleves ?? 0}</div><div class="stat-label">Élèves actifs</div></div>
+      <div class="stat-card"><div class="stat-num">${fmtMoney(totalMois)}</div><div class="stat-label">Encaissé (30j)</div></div>
+      <div class="stat-card"><div class="stat-num">${enRetard}</div><div class="stat-label">Paiements en retard</div></div>
+      <div class="stat-card"><div class="stat-num">${nbAbsences ?? 0}</div><div class="stat-label">Absences (30j)</div></div>
+    </div>
+    <div class="panel">
+      <h2 style="margin-bottom:10px;">Bienvenue</h2>
+      <p style="color:var(--chalk-dim); font-size:0.9rem; line-height:1.6;">
+        Utilise le menu à gauche pour gérer tes élèves, suivre les séances et paiements (tous les 4 séances),
+        noter les absences, publier des ressources de cours et planifier tes séances.
+      </p>
+    </div>
+  `;
+}
+
+async function renderEleveDashboard(main){
+  main.innerHTML = `
+    <div class="page-head"><div><h1>Mon espace</h1><div class="page-sub">Bienvenue, ${state.profile.full_name}</div></div></div>
+    <div class="panel"><p style="color:var(--chalk-dim);">Consulte tes séances, tes paiements et les ressources de cours depuis le menu à gauche.</p></div>
+  `;
+}
+
+/* ============================================================
+   ÉLÈVES (prof)
+   ============================================================ */
+async function renderStudents(main){
+  const { data: students, error } = await sb.from("students").select("*").order("full_name");
+  if(error) throw error;
+  const q = (state.studentsSearch||"").toLowerCase().trim();
+  const filtered = students.filter(s=>{
+    if(!q) return true;
+    return s.full_name.toLowerCase().includes(q) || (s.niveau||"").toLowerCase().includes(q);
+  });
+
+  main.innerHTML = `
+    <div class="page-head">
+      <div><h1>Élèves</h1><div class="page-sub">${filtered.length} / ${students.length} élève(s)</div></div>
+      <button class="btn btn-primary" id="add-student" style="width:auto;">+ Ajouter un élève</button>
+    </div>
+    <div class="toolbar">
+      <input class="search-input" id="search-students" placeholder="Rechercher par nom ou section…" value="${state.studentsSearch||""}">
+    </div>
+    <div class="panel">
+      ${filtered.length===0 ? `<div class="empty-state">Aucun élève ne correspond.</div>` : `
+      <table>
+        <thead><tr><th>Nom</th><th>Section</th><th>Tarif / 4 séances</th><th>Cycle</th><th>Contact parent</th><th>Statut</th><th></th></tr></thead>
+        <tbody>
+          ${filtered.map(s=>{
+            const ni = niveauInfo(s.niveau);
+            const cnt = s.seances_non_payees || 0;
+            return `
+            <tr>
+              <td>${s.full_name}</td>
+              <td>${s.niveau}</td>
+              <td>${ni && ni.tarif ? fmtMoney(ni.tarif) : '—'}</td>
+              <td>
+                <div style="display:flex; align-items:center; gap:6px;">
+                  ${counterBadge(cnt)}
+                  <button class="icon-btn" data-minus-session="${s.id}" title="Retirer une séance" style="padding:2px 6px;">−</button>
+                  <button class="icon-btn" data-plus-session="${s.id}" title="Ajouter une séance effectuée" style="padding:2px 6px;">+</button>
+                  <button class="icon-btn" data-pay="${s.id}" title="Enregistrer le paiement dû" style="padding:2px 6px;">💰</button>
+                </div>
+              </td>
+              <td>${s.parent_phone || "—"}</td>
+              <td><span class="tag ${s.actif?'tag-ok':'tag-bad'}">${s.actif?'Actif':'Inactif'}</span></td>
+              <td style="text-align:right; white-space:nowrap;">
+                <button class="icon-btn" data-edit="${s.id}" title="Modifier">✎</button>
+                <button class="icon-btn" data-del="${s.id}" title="Supprimer">✕</button>
+              </td>
+            </tr>`;}).join("")}
+        </tbody>
+      </table>`}
+    </div>
+  `;
+
+  document.getElementById("search-students").oninput = (e)=>{ state.studentsSearch = e.target.value; renderStudents(main); };
+  document.getElementById("add-student").onclick = () => openStudentForm();
+  document.querySelectorAll("[data-plus-session]").forEach(b=> b.onclick = async ()=>{
+    const s = students.find(x=>x.id===b.dataset.plusSession);
+    await sb.from("students").update({ seances_non_payees: (s.seances_non_payees||0) + 1 }).eq("id", s.id);
+    renderPage();
+  });
+  document.querySelectorAll("[data-minus-session]").forEach(b=> b.onclick = async ()=>{
+    const s = students.find(x=>x.id===b.dataset.minusSession);
+    const current = s.seances_non_payees || 0;
+    if(current === 0){ return; }
+    await sb.from("students").update({ seances_non_payees: current - 1 }).eq("id", s.id);
+    renderPage();
+  });
+  document.querySelectorAll("[data-pay]").forEach(b=> b.onclick = ()=> openQuickPaymentForm(students.find(s=>s.id===b.dataset.pay)));
+  document.querySelectorAll("[data-edit]").forEach(b=> b.onclick = ()=> openStudentForm(students.find(s=>s.id===b.dataset.edit)));
+  document.querySelectorAll("[data-del]").forEach(b=> b.onclick = async ()=>{
+    if(confirm("Supprimer cet élève et toutes ses données associées ?")){
+      await sb.from("students").delete().eq("id", b.dataset.del);
+      renderPage();
+    }
+  });
+}
+
+/* ============================================================
+   PAIEMENT RAPIDE — calcule la différence entre séances étudiées et payées
+   ============================================================ */
+async function openQuickPaymentForm(student){
+  const count = student.seances_non_payees || 0;
+  const ni = niveauInfo(student.niveau);
+  const suggested = ni && ni.tarif ? ni.tarif.toFixed(2) : "";
+  const modal = openModal(`
+    <h2>Paiement — ${student.full_name}</h2>
+    <p style="color:var(--chalk-dim); font-size:0.85rem; margin-bottom:14px;">
+      Compteur actuel : <strong>${count}</strong> séance(s). Ce paiement couvre un cycle de 4 séances
+      ${ni && ni.tarif ? ` (${ni.tarif} DT)` : ' — précise le niveau de l\'élève pour un calcul automatique'}
+      et fera passer le compteur à <strong>${count - 4}</strong>.
+    </p>
+    <form id="quick-payment-form">
+      <div class="field"><label>Montant (DT)</label><input required type="number" step="0.01" id="qp-montant" value="${suggested}"></div>
+      <div class="field"><label>Date</label><input required type="date" id="qp-date" value="${new Date().toISOString().slice(0,10)}"></div>
+      <div class="field"><label>Période couverte</label><input id="qp-periode" value="4 séances"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" id="cancel-btn">Annuler</button>
+        <button type="submit" class="btn btn-primary" style="width:auto;">Enregistrer le paiement</button>
+      </div>
+    </form>
+  `);
+  modal.querySelector("#cancel-btn").onclick = ()=> modal.remove();
+  modal.querySelector("#quick-payment-form").onsubmit = async (e)=>{
+    e.preventDefault();
+    await sb.from("payments").insert({
+      student_id: student.id,
+      montant: modal.querySelector("#qp-montant").value,
+      date_paiement: modal.querySelector("#qp-date").value,
+      periode_couverte: modal.querySelector("#qp-periode").value.trim(),
+      statut: "paye",
+    });
+    await sb.from("students").update({ seances_non_payees: count - 4 }).eq("id", student.id);
+    modal.remove();
+    renderPage();
+  };
+}
+
+function openStudentForm(student){
+  const isEdit = !!student;
+  const currentNiveauIsPreset = student ? !!niveauInfo(student.niveau) : true;
+  const modal = openModal(`
+    <h2>${isEdit? "Modifier l'élève" : "Ajouter un élève"}</h2>
+    <form id="student-form">
+      <div class="field"><label>Nom complet</label><input required id="s-name" value="${student?.full_name||''}"></div>
+      <div class="field"><label>Section / Niveau</label>
+        <select id="s-niveau">
+          ${NIVEAUX.map(n=>`<option value="${n.label}" ${student?.niveau===n.label?'selected':''}>${n.label}${n.tarif?` — ${n.tarif} DT / 4 séances`:''}</option>`).join("")}
+        </select>
+      </div>
+      <div class="field" id="custom-niveau-field" style="display:${!currentNiveauIsPreset?'block':'none'};">
+        <label>Préciser le niveau</label><input id="s-niveau-custom" value="${!currentNiveauIsPreset && student ? student.niveau : ''}">
+      </div>
+      <div class="field"><label>Nom du parent</label><input id="s-parent-name" value="${student?.parent_name||''}"></div>
+      <div class="field"><label>Téléphone du parent</label><input id="s-parent-phone" value="${student?.parent_phone||''}"></div>
+      <div class="field"><label>Remarques</label><textarea id="s-notes" rows="2">${student?.notes_libres||''}</textarea></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" id="cancel-btn">Annuler</button>
+        <button type="submit" class="btn btn-primary" style="width:auto;">${isEdit?'Enregistrer':'Ajouter'}</button>
+      </div>
+    </form>
+  `);
+  const niveauSel = modal.querySelector("#s-niveau");
+  const customField = modal.querySelector("#custom-niveau-field");
+  niveauSel.onchange = ()=>{ customField.style.display = niveauSel.value === "Autre" ? "block":"none"; };
+  modal.querySelector("#cancel-btn").onclick = ()=> modal.remove();
+  modal.querySelector("#student-form").onsubmit = async (e)=>{
+    e.preventDefault();
+    const chosen = niveauSel.value;
+    const niveauFinal = (chosen === "Autre" && modal.querySelector("#s-niveau-custom").value.trim())
+      ? modal.querySelector("#s-niveau-custom").value.trim() : chosen;
+    const ni = niveauInfo(chosen);
+    const payload = {
+      full_name: modal.querySelector("#s-name").value.trim(),
+      niveau: niveauFinal,
+      filiere: ni ? ni.filiere : "autre",
+      parent_name: modal.querySelector("#s-parent-name").value.trim(),
+      parent_phone: modal.querySelector("#s-parent-phone").value.trim(),
+      notes_libres: modal.querySelector("#s-notes").value.trim(),
+    };
+    if(isEdit){ await sb.from("students").update(payload).eq("id", student.id); }
+    else { await sb.from("students").insert(payload); }
+    modal.remove();
+    renderPage();
+  };
+}
+
+/* ============================================================
+   SÉANCES (prof)
+   ============================================================ */
+async function renderSessions(main){
+  const [{data:sessions}, {data:students}] = await Promise.all([
+    sb.from("sessions").select("*, students(full_name, niveau)").order("date_seance", {ascending:false}),
+    sb.from("students").select("id, full_name, niveau").order("full_name"),
+  ]);
+  main.innerHTML = `
+    <div class="page-head">
+      <div><h1>Séances</h1><div class="page-sub">${sessions.length} séance(s) — paiement dû tous les 4 séances effectuées</div></div>
+      <button class="btn btn-primary" id="add-session" style="width:auto;">+ Ajouter une séance</button>
+    </div>
+    <div class="panel">
+      ${sessions.length===0? `<div class="empty-state">Aucune séance enregistrée.</div>` : `
+      <table>
+        <thead><tr><th>Élève</th><th>Date</th><th>Horaire</th><th>Lieu</th><th>Statut</th><th></th></tr></thead>
+        <tbody>
+          ${sessions.map(s=>`
+            <tr>
+              <td>${s.students?.full_name||'—'}</td>
+              <td>${fmtDate(s.date_seance)}</td>
+              <td>${fmtTime(s.heure_debut)} – ${fmtTime(s.heure_fin)}</td>
+              <td>${s.lieu||'—'}</td>
+              <td>
+                <select class="mini-select" data-statut="${s.id}">
+                  <option value="planifie" ${s.statut==='planifie'?'selected':''}>Planifiée</option>
+                  <option value="effectue" ${s.statut==='effectue'?'selected':''}>Effectuée</option>
+                  <option value="absent" ${s.statut==='absent'?'selected':''}>Absence</option>
+                  <option value="annule" ${s.statut==='annule'?'selected':''}>Annulée</option>
+                </select>
+              </td>
+              <td style="text-align:right; white-space:nowrap;">
+                <button class="icon-btn" data-edit-session="${s.id}" title="Modifier">✎</button>
+                <button class="icon-btn" data-del-session="${s.id}" title="Supprimer">✕</button>
+              </td>
+            </tr>`).join("")}
+        </tbody>
+      </table>`}
+    </div>
+  `;
+  document.getElementById("add-session").onclick = () => openSessionForm(students);
+  document.querySelectorAll("[data-edit-session]").forEach(b=> b.onclick = ()=> openSessionForm(students, sessions.find(s=>s.id===b.dataset.editSession)));
+  document.querySelectorAll("[data-statut]").forEach(sel=>{
+    sel.onchange = async ()=>{
+      const id = sel.dataset.statut;
+      const newStatut = sel.value;
+      await sb.from("sessions").update({statut:newStatut}).eq("id", id);
+      if(newStatut === "absent"){
+        const s = sessions.find(x=>x.id===id);
+        const { data: existing } = await sb.from("absences").select("id").eq("session_id", id).maybeSingle();
+        if(!existing){
+          await sb.from("absences").insert({ student_id: s.student_id, session_id: id, date_absence: s.date_seance, justifiee:false });
+        }
+      }
+      renderPage();
+    };
+  });
+  document.querySelectorAll("[data-del-session]").forEach(b=> b.onclick = async ()=>{
+    if(confirm("Supprimer cette séance ?")){ await sb.from("sessions").delete().eq("id", b.dataset.delSession); renderPage(); }
+  });
+}
+
+function openSessionForm(students, session){
+  const isEdit = !!session;
+  const modal = openModal(`
+    <h2>${isEdit ? "Modifier la séance" : "Ajouter une séance"}</h2>
+    <form id="session-form">
+      <div class="field"><label>Élève</label>
+        <select required id="se-student" ${isEdit?'disabled':''}>${students.map(s=>`<option value="${s.id}" ${session?.student_id===s.id?'selected':''}>${s.full_name} (${s.niveau})</option>`).join("")}</select>
+      </div>
+      <div class="field"><label>Date</label><input required type="date" id="se-date" value="${session?.date_seance || new Date().toISOString().slice(0,10)}"></div>
+      <div class="field"><label>Heure début</label><input required type="time" id="se-debut" value="${session?.heure_debut?.slice(0,5) || '14:00'}"></div>
+      <div class="field"><label>Heure fin</label><input required type="time" id="se-fin" value="${session?.heure_fin?.slice(0,5) || '15:00'}"></div>
+      <div class="field"><label>Lieu</label><input id="se-lieu" value="${session?.lieu || 'Cabinet'}"></div>
+      <div class="field"><label>Statut</label>
+        <select id="se-statut">
+          <option value="planifie" ${session?.statut==='planifie'?'selected':''}>Planifiée</option>
+          <option value="effectue" ${session?.statut==='effectue'?'selected':''}>Effectuée</option>
+          <option value="absent" ${session?.statut==='absent'?'selected':''}>Absence</option>
+          <option value="annule" ${session?.statut==='annule'?'selected':''}>Annulée</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" id="cancel-btn">Annuler</button>
+        <button type="submit" class="btn btn-primary" style="width:auto;">${isEdit?'Enregistrer les modifications':'Ajouter'}</button>
+      </div>
+    </form>
+  `);
+  modal.querySelector("#cancel-btn").onclick = ()=> modal.remove();
+  modal.querySelector("#session-form").onsubmit = async (e)=>{
+    e.preventDefault();
+    const payload = {
+      date_seance: modal.querySelector("#se-date").value,
+      heure_debut: modal.querySelector("#se-debut").value,
+      heure_fin: modal.querySelector("#se-fin").value,
+      lieu: modal.querySelector("#se-lieu").value.trim(),
+      statut: modal.querySelector("#se-statut").value,
+    };
+    if(isEdit){
+      await sb.from("sessions").update(payload).eq("id", session.id);
+    } else {
+      payload.student_id = modal.querySelector("#se-student").value;
+      await sb.from("sessions").insert(payload);
+    }
+    modal.remove();
+    renderPage();
+  };
+}
+
+/* ============================================================
+   PAIEMENTS (prof)
+   ============================================================ */
+async function renderPayments(main){
+  const [{data:payments}, {data:students}] = await Promise.all([
+    sb.from("payments").select("*, students(full_name)").order("date_paiement", {ascending:false}),
+    sb.from("students").select("id, full_name, niveau").order("full_name"),
+  ]);
+  main.innerHTML = `
+    <div class="page-head">
+      <div><h1>Paiements</h1><div class="page-sub">${payments.length} enregistrement(s)</div></div>
+      <button class="btn btn-primary" id="add-payment" style="width:auto;">+ Enregistrer un paiement</button>
+    </div>
+    <div class="panel">
+      ${payments.length===0? `<div class="empty-state">Aucun paiement enregistré.</div>` : `
+      <table>
+        <thead><tr><th>Élève</th><th>Montant</th><th>Date</th><th>Période</th><th>Statut</th><th></th></tr></thead>
+        <tbody>
+          ${payments.map(p=>`
+            <tr>
+              <td>${p.students?.full_name || '—'}</td>
+              <td>${fmtMoney(p.montant)}</td>
+              <td>${fmtDate(p.date_paiement)}</td>
+              <td>${p.periode_couverte || '—'}</td>
+              <td><span class="tag ${p.statut==='paye'?'tag-ok':p.statut==='en_attente'?'tag-warn':'tag-bad'}">${p.statut.replace('_',' ')}</span></td>
+              <td style="text-align:right; white-space:nowrap;">
+                <button class="icon-btn" data-edit-pay="${p.id}" title="Modifier">✎</button>
+                <button class="icon-btn" data-del-pay="${p.id}" title="Supprimer">✕</button>
+              </td>
+            </tr>`).join("")}
+        </tbody>
+      </table>`}
+    </div>
+  `;
+  document.getElementById("add-payment").onclick = () => openPaymentForm(students);
+  document.querySelectorAll("[data-edit-pay]").forEach(b=> b.onclick = ()=> openPaymentForm(students, payments.find(p=>p.id===b.dataset.editPay)));
+  document.querySelectorAll("[data-del-pay]").forEach(b=> b.onclick = async ()=>{
+    if(confirm("Supprimer ce paiement ?")){ await sb.from("payments").delete().eq("id", b.dataset.delPay); renderPage(); }
+  });
+}
+
+function openPaymentForm(students, payment){
+  const isEdit = !!payment;
+  const modal = openModal(`
+    <h2>${isEdit ? "Modifier le paiement" : "Enregistrer un paiement"}</h2>
+    <form id="payment-form">
+      <div class="field"><label>Élève</label>
+        <select required id="p-student" ${isEdit?'disabled':''}>${students.map(s=>`<option value="${s.id}" data-niveau="${s.niveau}" ${payment?.student_id===s.id?'selected':''}>${s.full_name} (${s.niveau})</option>`).join("")}</select>
+      </div>
+      <div class="field"><label>Montant (DT)</label><input required type="number" step="0.01" id="p-montant" value="${payment?.montant??''}"></div>
+      <div class="field"><label>Date</label><input required type="date" id="p-date" value="${payment?.date_paiement || new Date().toISOString().slice(0,10)}"></div>
+      <div class="field"><label>Période couverte</label><input id="p-periode" placeholder="ex: Séances 1-4" value="${payment?.periode_couverte||''}"></div>
+      <div class="field"><label>Statut</label>
+        <select id="p-statut">
+          <option value="paye" ${payment?.statut==='paye'?'selected':''}>Payé</option>
+          <option value="en_attente" ${payment?.statut==='en_attente'?'selected':''}>En attente</option>
+          <option value="en_retard" ${payment?.statut==='en_retard'?'selected':''}>En retard</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" id="cancel-btn">Annuler</button>
+        <button type="submit" class="btn btn-primary" style="width:auto;">${isEdit?'Enregistrer les modifications':'Enregistrer'}</button>
+      </div>
+    </form>
+  `);
+  const studentSel = modal.querySelector("#p-student");
+  const montantInput = modal.querySelector("#p-montant");
+  function updateMontant(){
+    const opt = studentSel.options[studentSel.selectedIndex];
+    const ni = niveauInfo(opt?.dataset.niveau);
+    if(ni && ni.tarif){ montantInput.value = ni.tarif.toFixed(2); }
+  }
+  if(!isEdit){ studentSel.onchange = updateMontant; updateMontant(); }
+  modal.querySelector("#cancel-btn").onclick = ()=> modal.remove();
+  modal.querySelector("#payment-form").onsubmit = async (e)=>{
+    e.preventDefault();
+    const payload = {
+      student_id: studentSel.value,
+      montant: montantInput.value,
+      date_paiement: modal.querySelector("#p-date").value,
+      periode_couverte: modal.querySelector("#p-periode").value.trim(),
+      statut: modal.querySelector("#p-statut").value,
+    };
+    if(isEdit){
+      await sb.from("payments").update(payload).eq("id", payment.id);
+    } else {
+      await sb.from("payments").insert(payload);
+    }
+    modal.remove();
+    renderPage();
+  };
+}
+
+/* ============================================================
+   ABSENCES (prof)
+   ============================================================ */
+async function renderAbsences(main){
+  const [{data:absences}, {data:students}] = await Promise.all([
+    sb.from("absences").select("*, students(full_name)").order("date_absence", {ascending:false}),
+    sb.from("students").select("id, full_name").order("full_name"),
+  ]);
+  main.innerHTML = `
+    <div class="page-head">
+      <div><h1>Absences</h1><div class="page-sub">${absences.length} absence(s)</div></div>
+      <button class="btn btn-primary" id="add-absence" style="width:auto;">+ Ajouter une absence</button>
+    </div>
+    <div class="panel">
+      ${absences.length===0? `<div class="empty-state">Aucune absence enregistrée.</div>` : `
+      <table>
+        <thead><tr><th>Élève</th><th>Date</th><th>Justifiée</th><th>Motif</th></tr></thead>
+        <tbody>
+          ${absences.map(a=>`
+            <tr>
+              <td>${a.students?.full_name||'—'}</td>
+              <td>${fmtDate(a.date_absence)}</td>
+              <td><span class="tag ${a.justifiee?'tag-ok':'tag-bad'}">${a.justifiee?'Oui':'Non'}</span></td>
+              <td>${a.motif||'—'}</td>
+            </tr>`).join("")}
+        </tbody>
+      </table>`}
+    </div>
+  `;
+  document.getElementById("add-absence").onclick = () => openAbsenceForm(students);
+}
+
+function openAbsenceForm(students){
+  const modal = openModal(`
+    <h2>Ajouter une absence</h2>
+    <form id="absence-form">
+      <div class="field"><label>Élève</label>
+        <select required id="a-student">${students.map(s=>`<option value="${s.id}">${s.full_name}</option>`).join("")}</select>
+      </div>
+      <div class="field"><label>Date</label><input required type="date" id="a-date" value="${new Date().toISOString().slice(0,10)}"></div>
+      <div class="field"><label>Justifiée ?</label>
+        <select id="a-justifiee"><option value="false">Non</option><option value="true">Oui</option></select>
+      </div>
+      <div class="field"><label>Motif</label><input id="a-motif"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" id="cancel-btn">Annuler</button>
+        <button type="submit" class="btn btn-primary" style="width:auto;">Ajouter</button>
+      </div>
+    </form>
+  `);
+  modal.querySelector("#cancel-btn").onclick = ()=> modal.remove();
+  modal.querySelector("#absence-form").onsubmit = async (e)=>{
+    e.preventDefault();
+    await sb.from("absences").insert({
+      student_id: modal.querySelector("#a-student").value,
+      date_absence: modal.querySelector("#a-date").value,
+      justifiee: modal.querySelector("#a-justifiee").value === "true",
+      motif: modal.querySelector("#a-motif").value.trim(),
+    });
+    modal.remove();
+    renderPage();
+  };
+}
+
+/* ============================================================
+   NOTES (prof)
+   ============================================================ */
+async function renderGrades(main){
+  const [{data:grades}, {data:students}] = await Promise.all([
+    sb.from("grades").select("*, students(full_name)").order("date_evaluation", {ascending:false}),
+    sb.from("students").select("id, full_name").order("full_name"),
+  ]);
+  main.innerHTML = `
+    <div class="page-head">
+      <div><h1>Notes</h1><div class="page-sub">${grades.length} évaluation(s)</div></div>
+      <button class="btn btn-primary" id="add-grade" style="width:auto;">+ Ajouter une note</button>
+    </div>
+    <div class="panel">
+      ${grades.length===0? `<div class="empty-state">Aucune note enregistrée.</div>` : `
+      <table>
+        <thead><tr><th>Élève</th><th>Évaluation</th><th>Note</th><th>Date</th></tr></thead>
+        <tbody>
+          ${grades.map(g=>`
+            <tr>
+              <td>${g.students?.full_name||'—'}</td>
+              <td>${g.titre}</td>
+              <td>${g.note}/${g.bareme}</td>
+              <td>${fmtDate(g.date_evaluation)}</td>
+            </tr>`).join("")}
+        </tbody>
+      </table>`}
+    </div>
+  `;
+  document.getElementById("add-grade").onclick = () => openGradeForm(students);
+}
+
+function openGradeForm(students){
+  const modal = openModal(`
+    <h2>Ajouter une note</h2>
+    <form id="grade-form">
+      <div class="field"><label>Élève</label>
+        <select required id="g-student">${students.map(s=>`<option value="${s.id}">${s.full_name}</option>`).join("")}</select>
+      </div>
+      <div class="field"><label>Titre de l'évaluation</label><input required id="g-titre" placeholder="ex: Devoir de contrôle N°1"></div>
+      <div class="field"><label>Note</label><input required type="number" step="0.25" id="g-note"></div>
+      <div class="field"><label>Barème</label><input required type="number" step="0.5" id="g-bareme" value="20"></div>
+      <div class="field"><label>Date</label><input required type="date" id="g-date" value="${new Date().toISOString().slice(0,10)}"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" id="cancel-btn">Annuler</button>
+        <button type="submit" class="btn btn-primary" style="width:auto;">Ajouter</button>
+      </div>
+    </form>
+  `);
+  modal.querySelector("#cancel-btn").onclick = ()=> modal.remove();
+  modal.querySelector("#grade-form").onsubmit = async (e)=>{
+    e.preventDefault();
+    await sb.from("grades").insert({
+      student_id: modal.querySelector("#g-student").value,
+      titre: modal.querySelector("#g-titre").value.trim(),
+      note: modal.querySelector("#g-note").value,
+      bareme: modal.querySelector("#g-bareme").value,
+      date_evaluation: modal.querySelector("#g-date").value,
+    });
+    modal.remove();
+    renderPage();
+  };
+}
+
+/* ============================================================
+   RESSOURCES (PDF / VIDÉO) — classées par section et niveau
+   ============================================================ */
+async function renderResources(main, isProf){
+  const { data: resources } = await sb.from("course_resources").select("*").order("niveau").order("ordre");
+  let myStudent = null;
+  if(!isProf){ myStudent = await myStudentRow(); }
+
+  const visible = (resources||[]).filter(r=>{
+    if(!isProf && !r.visible) return false;
+    if(!isProf && myStudent){
+      const niveauOk = !r.niveau || r.niveau === myStudent.niveau;
+      const filiereOk = !r.filiere || r.filiere === myStudent.filiere;
+      return niveauOk && filiereOk;
+    }
+    return true;
+  });
+
+  const groups = {};
+  visible.forEach(r=>{
+    const key = r.niveau || "Tous niveaux";
+    groups[key] = groups[key] || [];
+    groups[key].push(r);
+  });
+  const groupKeys = Object.keys(groups).sort();
+
+  main.innerHTML = `
+    <div class="page-head">
+      <div><h1>Ressources</h1><div class="page-sub">Cours en PDF et vidéo, classés par section et niveau</div></div>
+      ${isProf ? `<button class="btn btn-primary" id="add-resource" style="width:auto;">+ Ajouter une ressource</button>` : ``}
+    </div>
+    ${groupKeys.length===0 ? `<div class="panel"><div class="empty-state">Aucune ressource disponible.</div></div>` :
+      groupKeys.map(key => `
+      <div class="panel">
+        <h3>${key}</h3>
+        <table>
+          <thead><tr><th>Titre</th><th>Type</th><th>Matière</th>${isProf?'<th>Visible</th><th></th>':'<th></th>'}</tr></thead>
+          <tbody>
+            ${groups[key].map(r=>`
+              <tr>
+                <td>${r.titre}${r.description?`<div style="color:var(--chalk-dim); font-size:0.78rem;">${r.description}</div>`:''}</td>
+                <td><span class="tag ${r.type==='pdf'?'tag-warn':'tag-ok'}">${r.type.toUpperCase()}</span></td>
+                <td>${r.matiere}</td>
+                ${isProf?`<td><span class="tag ${r.visible?'tag-ok':'tag-bad'}">${r.visible?'Oui':'Non'}</span></td>
+                <td style="text-align:right;"><button class="icon-btn" data-open="${r.id}">Ouvrir</button> <button class="icon-btn" data-del-res="${r.id}">✕</button></td>`
+                :`<td style="text-align:right;"><button class="icon-btn" data-open="${r.id}">Télécharger →</button></td>`}
+              </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>`).join("")
+    }
+  `;
+  if(isProf){
+    document.getElementById("add-resource").onclick = () => openResourceForm();
+    document.querySelectorAll("[data-del-res]").forEach(b=> b.onclick = async ()=>{
+      if(confirm("Supprimer cette ressource ?")){ await sb.from("course_resources").delete().eq("id", b.dataset.delRes); renderPage(); }
+    });
+  }
+  document.querySelectorAll("[data-open]").forEach(b=> b.onclick = async ()=>{
+    const r = visible.find(x=>x.id===b.dataset.open) || (resources||[]).find(x=>x.id===b.dataset.open);
+    if(r.video_url){ window.open(r.video_url, "_blank"); }
+    else if(r.fichier_path){
+      const { data } = await sb.storage.from("course-files").createSignedUrl(r.fichier_path, 3600);
+      if(data?.signedUrl) window.open(data.signedUrl, "_blank");
+    }
+  });
+}
+
+function openResourceForm(){
+  const modal = openModal(`
+    <h2>Ajouter une ressource</h2>
+    <form id="resource-form">
+      <div class="field"><label>Titre</label><input required id="r-titre"></div>
+      <div class="field"><label>Description</label><input id="r-desc"></div>
+      <div class="field"><label>Type</label>
+        <select id="r-type">
+          <option value="pdf">PDF</option>
+          <option value="video">Vidéo</option>
+        </select>
+      </div>
+      <div class="field" id="pdf-field"><label>Fichier PDF</label><input type="file" id="r-file" accept="application/pdf"></div>
+      <div class="field" id="video-field" style="display:none;"><label>Lien vidéo (YouTube, Vimeo…)</label><input id="r-video-url" placeholder="https://..."></div>
+      <div class="field"><label>Section / Niveau (laisser "Tous" si pour tout le monde)</label>
+        <select id="r-niveau">
+          <option value="">Tous niveaux</option>
+          ${NIVEAUX.map(n=>`<option value="${n.label}">${n.label}</option>`).join("")}
+        </select>
+      </div>
+      <div class="field"><label>Matière</label><input id="r-matiere" value="Mathématiques"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" id="cancel-btn">Annuler</button>
+        <button type="submit" class="btn btn-primary" style="width:auto;">Publier</button>
+      </div>
+    </form>
+  `);
+  const typeSel = modal.querySelector("#r-type");
+  typeSel.onchange = ()=>{
+    modal.querySelector("#pdf-field").style.display = typeSel.value==="pdf"?"block":"none";
+    modal.querySelector("#video-field").style.display = typeSel.value==="video"?"block":"none";
+  };
+  modal.querySelector("#cancel-btn").onclick = ()=> modal.remove();
+  modal.querySelector("#resource-form").onsubmit = async (e)=>{
+    e.preventDefault();
+    const type = typeSel.value;
+    let fichier_path = null, video_url = null;
+    if(type==="pdf"){
+      const file = modal.querySelector("#r-file").files[0];
+      if(file){
+        const path = `${Date.now()}_${file.name}`;
+        const { error: upErr } = await sb.storage.from("course-files").upload(path, file);
+        if(upErr){ alert("Erreur d'upload : " + upErr.message); return; }
+        fichier_path = path;
+      }
+    } else {
+      video_url = modal.querySelector("#r-video-url").value.trim();
+    }
+    const niveauVal = modal.querySelector("#r-niveau").value;
+    const ni = niveauInfo(niveauVal);
+    await sb.from("course_resources").insert({
+      titre: modal.querySelector("#r-titre").value.trim(),
+      description: modal.querySelector("#r-desc").value.trim(),
+      type, fichier_path, video_url,
+      niveau: niveauVal || null,
+      filiere: ni ? ni.filiere : null,
+      matiere: modal.querySelector("#r-matiere").value.trim(),
+    });
+    modal.remove();
+    renderPage();
+  };
+}
+
+/* ============================================================
+   PLANNING IA
+   ============================================================ */
+async function renderPlanning(main){
+  const { data: suggestions } = await sb.from("schedule_suggestions").select("*, students(full_name)").order("date_proposee");
+  main.innerHTML = `
+    <div class="page-head"><div><h1>Planning IA</h1><div class="page-sub">Suggestions de créneaux à valider</div></div></div>
+    <div class="panel">
+      ${(!suggestions || suggestions.length===0) ? `
+        <div class="empty-state">
+          Aucune suggestion pour l'instant.<br>
+          <span style="font-size:0.82rem;">Ce module proposera des créneaux à partir des disponibilités des élèves.</span>
+        </div>` : `
+      <table>
+        <thead><tr><th>Élève</th><th>Date</th><th>Créneau</th><th>Raison</th><th>Statut</th><th></th></tr></thead>
+        <tbody>
+          ${suggestions.map(s=>`
+            <tr>
+              <td>${s.students?.full_name||'—'}</td>
+              <td>${fmtDate(s.date_proposee)}</td>
+              <td>${fmtTime(s.heure_debut)} – ${fmtTime(s.heure_fin)}</td>
+              <td>${s.raison||'—'}</td>
+              <td><span class="tag ${s.statut==='validee'?'tag-ok':s.statut==='rejetee'?'tag-bad':'tag-warn'}">${s.statut}</span></td>
+              <td style="text-align:right;">
+                ${s.statut==='proposee'?`<button class="icon-btn" data-valid="${s.id}">✓ Valider</button> <button class="icon-btn" data-reject="${s.id}">✕ Rejeter</button>`:''}
+              </td>
+            </tr>`).join("")}
+        </tbody>
+      </table>`}
+    </div>
+  `;
+  document.querySelectorAll("[data-valid]").forEach(b=> b.onclick = async ()=>{
+    await sb.from("schedule_suggestions").update({statut:"validee"}).eq("id", b.dataset.valid);
+    renderPage();
+  });
+  document.querySelectorAll("[data-reject]").forEach(b=> b.onclick = async ()=>{
+    await sb.from("schedule_suggestions").update({statut:"rejetee"}).eq("id", b.dataset.reject);
+    renderPage();
+  });
+}
+
+/* ============================================================
+   VUES ÉLÈVE
+   ============================================================ */
+async function myStudentRow(){
+  const { data } = await sb.from("students").select("*").eq("profile_id", state.session.user.id).maybeSingle();
+  return data;
+}
+
+async function renderMySessions(main){
+  const me = await myStudentRow();
+  if(!me){ main.innerHTML = `<div class="empty-state">Ton profil n'est pas encore lié à une fiche élève. Contacte ton professeur.</div>`; return; }
+  const { data: sessions } = await sb.from("sessions").select("*").eq("student_id", me.id).order("date_seance", {ascending:false});
+  main.innerHTML = `
+    <div class="page-head"><div><h1>Mes séances</h1></div></div>
+    <div class="panel">
+      ${(!sessions||sessions.length===0)?`<div class="empty-state">Aucune séance pour l'instant.</div>`:`
+      <table><thead><tr><th>Date</th><th>Horaire</th><th>Lieu</th><th>Statut</th></tr></thead>
+      <tbody>${sessions.map(s=>`<tr><td>${fmtDate(s.date_seance)}</td><td>${fmtTime(s.heure_debut)} – ${fmtTime(s.heure_fin)}</td><td>${s.lieu||'—'}</td><td><span class="tag ${s.statut==='effectue'?'tag-ok':s.statut==='absent'?'tag-bad':'tag-warn'}">${s.statut}</span></td></tr>`).join("")}</tbody></table>`}
+    </div>`;
+}
+
+async function renderMyPayments(main){
+  const me = await myStudentRow();
+  if(!me){ main.innerHTML = `<div class="empty-state">Ton profil n'est pas encore lié à une fiche élève. Contacte ton professeur.</div>`; return; }
+  const { data: payments } = await sb.from("payments").select("*").eq("student_id", me.id).order("date_paiement", {ascending:false});
+  main.innerHTML = `
+    <div class="page-head"><div><h1>Mes paiements</h1></div></div>
+    <div class="panel">
+      ${(!payments||payments.length===0)?`<div class="empty-state">Aucun paiement enregistré.</div>`:`
+      <table><thead><tr><th>Montant</th><th>Date</th><th>Période</th><th>Statut</th></tr></thead>
+      <tbody>${payments.map(p=>`<tr><td>${fmtMoney(p.montant)}</td><td>${fmtDate(p.date_paiement)}</td><td>${p.periode_couverte||'—'}</td><td><span class="tag ${p.statut==='paye'?'tag-ok':'tag-warn'}">${p.statut}</span></td></tr>`).join("")}</tbody></table>`}
+    </div>`;
+}
+
+/* ============================================================ */
+init();
+</script>
+</body>
+</html>
