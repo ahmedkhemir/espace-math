@@ -25,7 +25,7 @@
     --sans: "Inter", system-ui, -apple-system, sans-serif;
   }
   *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;height:100%;}
+  html,body{margin:0;padding:0;height:100%; overflow-x:hidden;}
   body{
     background:var(--bg);
     color:var(--chalk);
@@ -109,7 +109,7 @@
   .stat-num{ font-family:var(--serif); font-size:1.7rem; color:var(--accent); }
   .stat-label{ font-size:0.82rem; color:var(--chalk-dim); margin-top:4px; }
 
-  .panel{ background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:20px; margin-bottom:20px;}
+  .panel{ background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:20px; margin-bottom:20px; overflow-x:auto; }
   .panel h3{ font-size:0.98rem; color:var(--accent); margin-bottom:10px; }
   table{ width:100%; border-collapse:collapse; font-size:0.88rem; }
   th{ text-align:left; color:var(--chalk-dim); font-weight:600; font-size:0.78rem; text-transform:none; padding:8px 10px; border-bottom:1px solid var(--line); }
@@ -143,8 +143,10 @@
     .brand{ display:none; }
     .sidebar-foot{ display:none; }
     .nav-item{ white-space:nowrap; }
-    .main{ padding:20px; }
-    table{ font-size:0.8rem; }
+    .main{ padding:16px; max-width:100%; }
+    table{ font-size:0.8rem; min-width:520px; }
+    .page-head{ align-items:flex-start; }
+    .modal{ max-width:100%; }
   }
 </style>
 </head>
