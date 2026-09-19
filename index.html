@@ -209,8 +209,8 @@ async function loadProfile(){
   const uid = state.session.user.id;
   let { data } = await sb.from("profiles").select("*").eq("id", uid).single();
   if(!data){
-    const { count } = await sb.from("profiles").select("*", { count: "exact", head:true }).eq("role","prof");
-    const role = (count === 0) ? "prof" : "eleve";
+    const { data: profExists } = await sb.rpc("any_prof_exists");
+    const role = profExists ? "eleve" : "prof";
     const { data: created } = await sb.from("profiles").insert({
       id: uid, role, full_name: state.session.user.user_metadata?.full_name || state.session.user.email
     }).select().single();
