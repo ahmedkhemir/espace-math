@@ -543,9 +543,10 @@ async function openQuickPaymentForm(student){
   };
 }
 
-function openStudentForm(student){
+async function openStudentForm(student){
   const isEdit = !!student;
   const currentNiveauIsPreset = student ? !!niveauInfo(student.niveau) : true;
+  const { data: eleveProfiles } = await sb.from("profiles").select("id, full_name").eq("role","eleve").order("full_name");
   const modal = openModal(`
     <h2>${isEdit? "Modifier l'élève" : "Ajouter un élève"}</h2>
     <form id="student-form">
@@ -557,6 +558,13 @@ function openStudentForm(student){
       </div>
       <div class="field" id="custom-niveau-field" style="display:${!currentNiveauIsPreset?'block':'none'};">
         <label>Préciser le niveau</label><input id="s-niveau-custom" value="${!currentNiveauIsPreset && student ? student.niveau : ''}">
+      </div>
+      <div class="field"><label>Compte élève lié</label>
+        <select id="s-profile">
+          <option value="">Aucun (pas encore de compte)</option>
+          ${(eleveProfiles||[]).map(p=>`<option value="${p.id}" ${student?.profile_id===p.id?'selected':''}>${p.full_name}</option>`).join("")}
+        </select>
+        <div style="color:var(--chalk-dim); font-size:0.78rem; margin-top:4px;">Permet à l'élève de voir ses séances, paiements et ressources en se connectant. Il doit d'abord créer son compte via "S'inscrire".</div>
       </div>
       <div class="field"><label>Nom du parent</label><input id="s-parent-name" value="${student?.parent_name||''}"></div>
       <div class="field"><label>Téléphone du parent</label><input id="s-parent-phone" value="${student?.parent_phone||''}"></div>
@@ -581,6 +589,7 @@ function openStudentForm(student){
       full_name: modal.querySelector("#s-name").value.trim(),
       niveau: niveauFinal,
       filiere: ni ? ni.filiere : "autre",
+      profile_id: modal.querySelector("#s-profile").value || null,
       parent_name: modal.querySelector("#s-parent-name").value.trim(),
       parent_phone: modal.querySelector("#s-parent-phone").value.trim(),
       notes_libres: modal.querySelector("#s-notes").value.trim(),
@@ -1031,7 +1040,10 @@ function openResourceForm(){
     if(type==="pdf"){
       const file = modal.querySelector("#r-file").files[0];
       if(file){
-        const path = `${Date.now()}_${file.name}`;
+        const safeName = file.name
+          .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // enlève les accents
+          .replace(/[^a-zA-Z0-9.\-_]/g, "_"); // remplace tout caractère non autorisé par _
+        const path = `${Date.now()}_${safeName}`;
         const { error: upErr } = await sb.storage.from("course-files").upload(path, file);
         if(upErr){ alert("Erreur d'upload : " + upErr.message); return; }
         fichier_path = path;
@@ -1106,13 +1118,16 @@ async function myStudentRow(){
 async function renderMySessions(main){
   const me = await myStudentRow();
   if(!me){ main.innerHTML = `<div class="empty-state">Ton profil n'est pas encore lié à une fiche élève. Contacte ton professeur.</div>`; return; }
-  const { data: sessions } = await sb.from("sessions").select("*").eq("student_id", me.id).order("date_seance", {ascending:false});
+  const count = me.seances_non_payees || 0;
   main.innerHTML = `
     <div class="page-head"><div><h1>Mes séances</h1></div></div>
+    <div class="cards-row">
+      <div class="stat-card"><div class="stat-num">${count}</div><div class="stat-label">Séance(s) depuis le dernier paiement</div></div>
+    </div>
     <div class="panel">
-      ${(!sessions||sessions.length===0)?`<div class="empty-state">Aucune séance pour l'instant.</div>`:`
-      <table><thead><tr><th>Date</th><th>Horaire</th><th>Lieu</th><th>Statut</th></tr></thead>
-      <tbody>${sessions.map(s=>`<tr><td>${fmtDate(s.date_seance)}</td><td>${fmtTime(s.heure_debut)} – ${fmtTime(s.heure_fin)}</td><td>${s.lieu||'—'}</td><td><span class="tag ${s.statut==='effectue'?'tag-ok':s.statut==='absent'?'tag-bad':'tag-warn'}">${s.statut}</span></td></tr>`).join("")}</tbody></table>`}
+      <p style="color:var(--chalk-dim); font-size:0.9rem; line-height:1.6;">
+        Le paiement est dû tous les 4 séances. Ton professeur met ce compteur à jour au fur et à mesure de tes séances.
+      </p>
     </div>`;
 }
 
