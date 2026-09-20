@@ -346,7 +346,7 @@ const NAV_ELEVE = [
   {id:"messages", label:"Messages", icon:"◪"},
 ];
 
-function renderShell(){
+async function renderShell(){
   const isProf = state.profile.role === "prof";
   const nav = isProf ? NAV_PROF : NAV_ELEVE;
   app.innerHTML = `
@@ -354,7 +354,7 @@ function renderShell(){
       <aside class="sidebar">
         <div class="brand">Espace Maths</div>
         <div>
-          ${nav.map(n => `<button class="nav-item ${state.route===n.id?'active':''}" data-route="${n.id}"><span>${n.icon}</span> ${n.label}</button>`).join("")}
+          ${nav.map(n => `<button class="nav-item ${state.route===n.id?'active':''}" data-route="${n.id}"><span>${n.icon}</span> ${n.label} <span class="nav-badge" data-badge="${n.id}" style="display:none; margin-left:auto; background:var(--danger); color:#fff; font-size:0.68rem; border-radius:10px; padding:1px 7px;"></span></button>`).join("")}
         </div>
         <div class="sidebar-foot">
           <div class="who">${state.profile.full_name}<br><span style="opacity:0.7">${isProf?"Professeur":"Élève"}</span></div>
@@ -365,10 +365,24 @@ function renderShell(){
     </div>
   `;
   document.querySelectorAll(".nav-item[data-route]").forEach(btn=>{
+    btn.style.display = "flex";
     btn.onclick = () => { state.route = btn.dataset.route; render(); };
   });
   document.getElementById("logout-btn").onclick = logout;
   renderPage();
+  updateNavBadges(isProf);
+}
+
+async function updateNavBadges(isProf){
+  const { data: unread } = await sb.from("chat_messages").select("student_id, sender").eq("sender", isProf ? "eleve" : "prof").eq("read", false);
+  if(!unread) return;
+  if(isProf){
+    const badge = document.querySelector('[data-badge="students"]');
+    if(badge && unread.length>0){ badge.textContent = unread.length; badge.style.display = "inline-block"; }
+  } else {
+    const badge = document.querySelector('[data-badge="messages"]');
+    if(badge && unread.length>0){ badge.textContent = unread.length; badge.style.display = "inline-block"; }
+  }
 }
 
 function render(){
@@ -461,6 +475,9 @@ async function renderEleveDashboard(main){
 async function renderStudents(main){
   const { data: students, error } = await sb.from("students").select("*").order("full_name");
   if(error) throw error;
+  const { data: unread } = await sb.from("chat_messages").select("student_id").eq("sender","eleve").eq("read", false);
+  const unreadMap = {};
+  (unread||[]).forEach(m=>{ unreadMap[m.student_id] = (unreadMap[m.student_id]||0) + 1; });
   const q = (state.studentsSearch||"").toLowerCase().trim();
   const filtered = students.filter(s=>{
     if(!q) return true;
@@ -496,7 +513,7 @@ async function renderStudents(main){
               <td>${s.parent_phone || "—"}</td>
               <td><span class="tag ${s.actif?'tag-ok':'tag-bad'}">${s.actif?'Actif':'Inactif'}</span></td>
               <td style="text-align:right; white-space:nowrap;">
-                <button class="icon-btn" data-chat="${s.id}" title="Discuter">💬</button>
+                <button class="icon-btn" data-chat="${s.id}" title="Discuter" style="position:relative;">💬${unreadMap[s.id] ? `<span style="position:absolute; top:-2px; right:-2px; background:var(--danger); color:#fff; font-size:0.62rem; border-radius:50%; min-width:15px; height:15px; display:inline-flex; align-items:center; justify-content:center; padding:0 2px;">${unreadMap[s.id]}</span>` : ''}</button>
                 <span style="display:inline-block; width:10px;"></span>
                 <button class="icon-btn" data-edit="${s.id}" title="Modifier">✎</button>
                 <span style="display:inline-block; width:14px;"></span>
@@ -623,6 +640,7 @@ async function openChatModal(student, isProfSide){
     box.scrollTop = box.scrollHeight;
   }
   await loadMessages();
+  await sb.from("chat_messages").update({ read: true }).eq("student_id", student.id).eq("sender", "eleve").eq("read", false);
 
   modal.querySelector("#chat-form").onsubmit = async (e)=>{
     e.preventDefault();
@@ -669,6 +687,7 @@ async function renderMyMessages(main){
     box.scrollTop = box.scrollHeight;
   }
   await loadMessages();
+  await sb.from("chat_messages").update({ read: true }).eq("student_id", me.id).eq("sender", "prof").eq("read", false);
   document.getElementById("chat-form").onsubmit = async (e)=>{
     e.preventDefault();
     const input = document.getElementById("chat-input");
