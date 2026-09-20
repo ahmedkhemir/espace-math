@@ -218,18 +218,21 @@ async function loadProfile(){
       id: uid, role, full_name: fullName
     }).select().single();
     data = created;
-    if(role === "eleve"){
+  }
+  state.profile = data;
+  if(data.role === "eleve"){
+    const { data: existingStudent } = await sb.from("students").select("id").eq("profile_id", uid).maybeSingle();
+    if(!existingStudent){
       const niveauChoisi = state.session.user.user_metadata?.niveau;
       const ni = niveauInfo(niveauChoisi);
       await sb.from("students").insert({
         profile_id: uid,
-        full_name: fullName,
+        full_name: data.full_name,
         niveau: ni ? ni.label : (niveauChoisi || "À définir"),
         filiere: ni ? ni.filiere : "autre",
       });
     }
   }
-  state.profile = data;
 }
 
 function renderAuth(){
