@@ -680,7 +680,7 @@ async function renderMyMessages(main){
   };
 }
 
-function openStudentForm(student){
+async function openStudentForm(student){
   const isEdit = !!student;
   const currentNiveauIsPreset = student ? !!niveauInfo(student.niveau) : true;
   const { data: eleveProfiles } = await sb.from("profiles").select("id, full_name").eq("role","eleve").order("full_name");
