@@ -343,6 +343,7 @@ const NAV_ELEVE = [
   {id:"my-sessions", label:"Mes séances", icon:"◔"},
   {id:"my-payments", label:"Mes paiements", icon:"◍"},
   {id:"resources", label:"Ressources", icon:"◫"},
+  {id:"messages", label:"Messages", icon:"◪"},
 ];
 
 function renderShell(){
@@ -392,6 +393,7 @@ async function renderPage(){
     if(isProf && state.route === "planning") return renderPlanning(main);
     if(!isProf && state.route === "my-sessions") return renderMySessions(main);
     if(!isProf && state.route === "my-payments") return renderMyPayments(main);
+    if(!isProf && state.route === "messages") return renderMyMessages(main);
   }catch(err){
     main.innerHTML = `<div class="empty-state">Erreur : ${err.message}</div>`;
   }
@@ -465,26 +467,23 @@ async function renderStudents(main){
     return s.full_name.toLowerCase().includes(q) || (s.niveau||"").toLowerCase().includes(q);
   });
 
-  main.innerHTML = `
-    <div class="page-head">
-      <div><h1>Élèves</h1><div class="page-sub">${filtered.length} / ${students.length} élève(s)</div></div>
-      <button class="btn btn-primary" id="add-student" style="width:auto;">+ Ajouter un élève</button>
-    </div>
-    <div class="toolbar">
-      <input class="search-input" id="search-students" placeholder="Rechercher par nom ou section…" value="${state.studentsSearch||""}">
-    </div>
-    <div class="panel">
-      ${filtered.length===0 ? `<div class="empty-state">Aucun élève ne correspond.</div>` : `
-      <table>
-        <thead><tr><th>Nom</th><th>Section</th><th>Tarif / 4 séances</th><th>Cycle</th><th>Contact parent</th><th>Statut</th><th></th></tr></thead>
-        <tbody>
-          ${filtered.map(s=>{
-            const ni = niveauInfo(s.niveau);
-            const cnt = s.seances_non_payees || 0;
-            return `
+  const groups = {};
+  filtered.forEach(s=>{
+    const key = s.niveau || "Autre";
+    if(!groups[key]) groups[key] = [];
+    groups[key].push(s);
+  });
+  const orderedKeys = [
+    ...NIVEAUX.map(n=>n.label).filter(k=>groups[k]),
+    ...Object.keys(groups).filter(k=>!NIVEAUX.some(n=>n.label===k)).sort()
+  ];
+
+  function studentRow(s){
+    const ni = niveauInfo(s.niveau);
+    const cnt = s.seances_non_payees || 0;
+    return `
             <tr>
               <td>${s.full_name}</td>
-              <td>${s.niveau}</td>
               <td>${ni && ni.tarif ? fmtMoney(ni.tarif) : '—'}</td>
               <td>
                 <div style="display:flex; align-items:center; gap:6px;">
@@ -497,14 +496,33 @@ async function renderStudents(main){
               <td>${s.parent_phone || "—"}</td>
               <td><span class="tag ${s.actif?'tag-ok':'tag-bad'}">${s.actif?'Actif':'Inactif'}</span></td>
               <td style="text-align:right; white-space:nowrap;">
+                <button class="icon-btn" data-chat="${s.id}" title="Discuter">💬</button>
+                <span style="display:inline-block; width:10px;"></span>
                 <button class="icon-btn" data-edit="${s.id}" title="Modifier">✎</button>
                 <span style="display:inline-block; width:14px;"></span>
                 <button class="icon-btn" data-del="${s.id}" title="Supprimer" style="color:var(--danger);">✕</button>
               </td>
-            </tr>`;}).join("")}
-        </tbody>
-      </table>`}
+            </tr>`;
+  }
+
+  main.innerHTML = `
+    <div class="page-head">
+      <div><h1>Élèves</h1><div class="page-sub">${filtered.length} / ${students.length} élève(s)</div></div>
+      <button class="btn btn-primary" id="add-student" style="width:auto;">+ Ajouter un élève</button>
     </div>
+    <div class="toolbar">
+      <input class="search-input" id="search-students" placeholder="Rechercher par nom ou section…" value="${state.studentsSearch||""}">
+    </div>
+    ${filtered.length===0 ? `<div class="panel"><div class="empty-state">Aucun élève ne correspond.</div></div>` :
+      orderedKeys.map(key=>`
+        <div class="panel">
+          <h2 style="font-size:1.05rem; margin-bottom:12px; color:var(--accent);">${key} <span style="color:var(--chalk-dim); font-weight:400; font-size:0.85rem;">(${groups[key].length})</span></h2>
+          <table>
+            <thead><tr><th>Nom</th><th>Tarif / 4 séances</th><th>Cycle</th><th>Contact parent</th><th>Statut</th><th></th></tr></thead>
+            <tbody>${groups[key].map(studentRow).join("")}</tbody>
+          </table>
+        </div>
+      `).join("")}
   `;
 
   document.getElementById("search-students").oninput = (e)=>{ state.studentsSearch = e.target.value; renderStudents(main); };
@@ -522,6 +540,7 @@ async function renderStudents(main){
     renderPage();
   });
   document.querySelectorAll("[data-pay]").forEach(b=> b.onclick = ()=> openQuickPaymentForm(students.find(s=>s.id===b.dataset.pay)));
+  document.querySelectorAll("[data-chat]").forEach(b=> b.onclick = ()=> openChatModal(students.find(s=>s.id===b.dataset.chat), true));
   document.querySelectorAll("[data-edit]").forEach(b=> b.onclick = ()=> openStudentForm(students.find(s=>s.id===b.dataset.edit)));
   document.querySelectorAll("[data-del]").forEach(b=> b.onclick = async ()=>{
     if(confirm("Supprimer définitivement cet élève, ses données ET son compte de connexion (email libéré pour une nouvelle inscription) ?")){
@@ -572,7 +591,96 @@ async function openQuickPaymentForm(student){
   };
 }
 
-async function openStudentForm(student){
+async /* ============================================================
+   MESSAGERIE PROF <-> ÉLÈVE
+   ============================================================ */
+async function openChatModal(student, isProfSide){
+  const modal = openModal(`
+    <h2>Discussion — ${student.full_name}</h2>
+    <div id="chat-messages" style="max-height:320px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; margin-bottom:14px; padding:4px;"></div>
+    <form id="chat-form" style="display:flex; gap:8px;">
+      <input id="chat-input" placeholder="Écris un message…" style="flex:1; padding:10px 12px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--chalk);" autocomplete="off">
+      <button type="submit" class="btn btn-primary" style="width:auto;">Envoyer</button>
+    </form>
+    <div class="modal-actions"><button type="button" class="btn btn-ghost" id="cancel-btn">Fermer</button></div>
+  `);
+  modal.querySelector("#cancel-btn").onclick = ()=> modal.remove();
+
+  async function loadMessages(){
+    const { data: messages } = await sb.from("chat_messages").select("*").eq("student_id", student.id).order("created_at");
+    const box = modal.querySelector("#chat-messages");
+    if(!messages || messages.length===0){
+      box.innerHTML = `<div style="color:var(--chalk-dim); font-size:0.85rem; text-align:center; padding:20px 0;">Aucun message pour l'instant.</div>`;
+    } else {
+      box.innerHTML = messages.map(m=>{
+        const mine = isProfSide ? m.sender==='prof' : m.sender==='eleve';
+        return `<div style="align-self:${mine?'flex-end':'flex-start'}; max-width:80%; background:${mine?'var(--accent-dim)':'var(--surface-2)'}; color:var(--chalk); padding:8px 12px; border-radius:10px; font-size:0.88rem;">
+          ${m.content}
+          <div style="font-size:0.68rem; color:var(--chalk-dim); margin-top:3px;">${new Date(m.created_at).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</div>
+        </div>`;
+      }).join("");
+    }
+    box.scrollTop = box.scrollHeight;
+  }
+  await loadMessages();
+
+  modal.querySelector("#chat-form").onsubmit = async (e)=>{
+    e.preventDefault();
+    const input = modal.querySelector("#chat-input");
+    const content = input.value.trim();
+    if(!content) return;
+    input.value = "";
+    await sb.from("chat_messages").insert({
+      student_id: student.id,
+      sender: isProfSide ? "prof" : "eleve",
+      content,
+    });
+    await loadMessages();
+  };
+}
+
+async function renderMyMessages(main){
+  const me = await myStudentRow();
+  if(!me){ main.innerHTML = `<div class="empty-state">Ton profil n'est pas encore lié à une fiche élève. Contacte ton professeur.</div>`; return; }
+  main.innerHTML = `
+    <div class="page-head"><div><h1>Messages</h1><div class="page-sub">Discussion avec ton professeur</div></div></div>
+    <div class="panel">
+      <div id="chat-messages" style="max-height:50vh; overflow-y:auto; display:flex; flex-direction:column; gap:8px; margin-bottom:14px; padding:4px;"></div>
+      <form id="chat-form" style="display:flex; gap:8px;">
+        <input id="chat-input" placeholder="Écris un message…" style="flex:1; padding:10px 12px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--chalk);" autocomplete="off">
+        <button type="submit" class="btn btn-primary" style="width:auto;">Envoyer</button>
+      </form>
+    </div>
+  `;
+  async function loadMessages(){
+    const { data: messages } = await sb.from("chat_messages").select("*").eq("student_id", me.id).order("created_at");
+    const box = document.getElementById("chat-messages");
+    if(!messages || messages.length===0){
+      box.innerHTML = `<div style="color:var(--chalk-dim); font-size:0.85rem; text-align:center; padding:20px 0;">Aucun message pour l'instant.</div>`;
+    } else {
+      box.innerHTML = messages.map(m=>{
+        const mine = m.sender==='eleve';
+        return `<div style="align-self:${mine?'flex-end':'flex-start'}; max-width:80%; background:${mine?'var(--accent-dim)':'var(--surface-2)'}; color:var(--chalk); padding:8px 12px; border-radius:10px; font-size:0.88rem;">
+          ${m.content}
+          <div style="font-size:0.68rem; color:var(--chalk-dim); margin-top:3px;">${new Date(m.created_at).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</div>
+        </div>`;
+      }).join("");
+    }
+    box.scrollTop = box.scrollHeight;
+  }
+  await loadMessages();
+  document.getElementById("chat-form").onsubmit = async (e)=>{
+    e.preventDefault();
+    const input = document.getElementById("chat-input");
+    const content = input.value.trim();
+    if(!content) return;
+    input.value = "";
+    await sb.from("chat_messages").insert({ student_id: me.id, sender: "eleve", content });
+    await loadMessages();
+  };
+}
+
+function openStudentForm(student){
   const isEdit = !!student;
   const currentNiveauIsPreset = student ? !!niveauInfo(student.niveau) : true;
   const { data: eleveProfiles } = await sb.from("profiles").select("id, full_name").eq("role","eleve").order("full_name");
