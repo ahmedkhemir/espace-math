@@ -140,9 +140,11 @@
   @media (max-width: 760px){
     #app{ flex-direction:column; }
     .sidebar{ position:static; width:100%; height:auto; flex-direction:row; overflow-x:auto; padding:12px; }
+    .nav-list{ display:flex; flex-direction:row; gap:4px; }
     .brand{ display:none; }
     .sidebar-foot{ display:none; }
-    .nav-item{ white-space:nowrap; }
+    .nav-item{ white-space:nowrap; width:auto; }
+    .nav-badge{ margin-left:4px !important; }
     .main{ padding:16px; max-width:100%; }
     table{ font-size:0.8rem; min-width:520px; }
     .page-head{ align-items:flex-start; }
@@ -353,7 +355,7 @@ async function renderShell(){
     <div id="app-inner" style="display:flex; width:100%;">
       <aside class="sidebar">
         <div class="brand">Espace Maths</div>
-        <div>
+        <div class="nav-list">
           ${nav.map(n => `<button class="nav-item ${state.route===n.id?'active':''}" data-route="${n.id}"><span>${n.icon}</span> ${n.label} <span class="nav-badge" data-badge="${n.id}" style="display:none; margin-left:auto; background:var(--danger); color:#fff; font-size:0.68rem; border-radius:10px; padding:1px 7px;"></span></button>`).join("")}
         </div>
         <div class="sidebar-foot">
