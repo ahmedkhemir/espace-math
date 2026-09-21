@@ -39,6 +39,7 @@
 
   /* ---------- layout ---------- */
   #app{min-height:100vh; display:flex;}
+  .app-shell{ display:flex; width:100%; }
 
   /* ---------- auth screen ---------- */
   .auth-wrap{
@@ -138,6 +139,7 @@
   .filters-row{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
 
   @media (max-width: 760px){
+    .app-shell{ flex-direction:column; }
     #app{ flex-direction:column; }
     .sidebar{ position:static; width:100%; height:auto; flex-direction:row; overflow-x:auto; padding:12px; }
     .nav-list{ display:flex; flex-direction:row; gap:4px; }
@@ -352,7 +354,7 @@ async function renderShell(){
   const isProf = state.profile.role === "prof";
   const nav = isProf ? NAV_PROF : NAV_ELEVE;
   app.innerHTML = `
-    <div id="app-inner" style="display:flex; width:100%;">
+    <div class="app-shell">
       <aside class="sidebar">
         <div class="brand">Espace Maths</div>
         <div class="nav-list">
