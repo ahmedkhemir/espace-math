@@ -142,9 +142,10 @@
     .app-shell{ flex-direction:column; }
     #app{ flex-direction:column; }
     .sidebar{ position:static; width:100%; height:auto; flex-direction:row; overflow-x:auto; padding:12px; }
-    .nav-list{ display:flex; flex-direction:row; gap:4px; }
+    .nav-list{ display:flex; flex-direction:row; gap:4px; flex:1; min-width:0; }
     .brand{ display:none; }
-    .sidebar-foot{ display:none; }
+    .sidebar-foot{ margin-top:0; padding-top:0; border-top:none; flex-shrink:0; }
+    .who{ display:none; }
     .nav-item{ white-space:nowrap; width:auto; }
     .nav-badge{ margin-left:4px !important; }
     .main{ padding:16px; max-width:100%; }
