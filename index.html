@@ -692,35 +692,56 @@ async function renderStudents(main){
 async function openQuickPaymentForm(student){
   const count = student.seances_non_payees || 0;
   const ni = niveauInfo(student.niveau);
-  const suggested = ni && ni.tarif ? ni.tarif.toFixed(2) : "";
+  const tarif = ni && ni.tarif ? ni.tarif : 0;           // prix de 4 séances
+  const prixSeance = tarif ? tarif / 4 : 0;               // 50 DT -> 12.5 / 40 DT -> 10
+  const suggested = tarif ? tarif.toFixed(2) : "";
+  const defSeances = tarif ? 4 : "";
   const modal = openModal(`
     <h2>Paiement — ${student.full_name}</h2>
     <p style="color:var(--chalk-dim); font-size:0.85rem; margin-bottom:14px;">
-      Compteur actuel : <strong>${count}</strong> séance(s). Ce paiement couvre un cycle de 4 séances
-      ${ni && ni.tarif ? ` (${ni.tarif} DT)` : ' — précise le niveau de l\'élève pour un calcul automatique'}
-      et fera passer le compteur à <strong>${count - 4}</strong>.
+      Compteur actuel : <strong>${count}</strong> séance(s).
+      ${tarif ? `Tarif : ${tarif} DT pour 4 séances (${prixSeance} DT la séance).` : `Précise le niveau de l'élève pour un calcul automatique, ou saisis le nombre de séances à la main.`}
     </p>
     <form id="quick-payment-form">
-      <div class="field"><label>Montant (DT)</label><input required type="number" step="0.01" id="qp-montant" value="${suggested}"></div>
+      <div class="field"><label>Montant reçu (DT)</label><input required type="number" step="0.01" min="0" id="qp-montant" value="${suggested}"></div>
+      <div class="field"><label>Séances payées (calculé automatiquement, modifiable)</label><input required type="number" step="1" min="1" id="qp-seances" value="${defSeances}"></div>
+      <div id="qp-result" style="background:rgba(47,227,194,.12); border:1px solid var(--teal); color:var(--chalk); padding:10px 12px; border-radius:12px; font-size:0.88rem; margin-bottom:16px;"></div>
       <div class="field"><label>Date</label><input required type="date" id="qp-date" value="${new Date().toISOString().slice(0,10)}"></div>
-      <div class="field"><label>Période couverte</label><input id="qp-periode" value="4 séances"></div>
       <div class="modal-actions">
         <button type="button" class="btn btn-ghost" id="cancel-btn">Annuler</button>
         <button type="submit" class="btn btn-primary" style="width:auto;">Enregistrer le paiement</button>
       </div>
     </form>
   `);
+  const inMontant = modal.querySelector("#qp-montant");
+  const inSeances = modal.querySelector("#qp-seances");
+  const result = modal.querySelector("#qp-result");
+  function refresh(){
+    const n = parseInt(inSeances.value, 10) || 0;
+    result.innerHTML = `Compteur : <strong>${count}</strong> − <strong>${n}</strong> = <strong>${count - n}</strong>`;
+  }
+  inMontant.oninput = ()=>{
+    if(prixSeance){
+      const m = parseFloat(inMontant.value) || 0;
+      inSeances.value = Math.round(m / prixSeance);
+    }
+    refresh();
+  };
+  inSeances.oninput = refresh;
+  refresh();
   modal.querySelector("#cancel-btn").onclick = ()=> modal.remove();
   modal.querySelector("#quick-payment-form").onsubmit = async (e)=>{
     e.preventDefault();
+    const n = parseInt(inSeances.value, 10);
+    if(!n || n < 1){ alert("Indique le nombre de séances payées."); return; }
     await sb.from("payments").insert({
       student_id: student.id,
-      montant: modal.querySelector("#qp-montant").value,
+      montant: inMontant.value,
       date_paiement: modal.querySelector("#qp-date").value,
-      periode_couverte: modal.querySelector("#qp-periode").value.trim(),
+      periode_couverte: n + " séance" + (n>1?"s":""),
       statut: "paye",
     });
-    await sb.from("students").update({ seances_non_payees: count - 4 }).eq("id", student.id);
+    await sb.from("students").update({ seances_non_payees: count - n }).eq("id", student.id);
     modal.remove();
     renderPage();
   };
